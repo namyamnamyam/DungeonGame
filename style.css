@@ -16,7 +16,6 @@
 }
 
 * { box-sizing: border-box; }
-
 html, body { min-height: 100%; }
 
 body {
@@ -31,7 +30,10 @@ body {
   overflow-x: hidden;
 }
 
-button, canvas { image-rendering: pixelated; }
+button, canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
 button { font: inherit; }
 
 .scanlines {
@@ -39,8 +41,8 @@ button { font: inherit; }
   inset: 0;
   z-index: 99;
   pointer-events: none;
-  opacity: .17;
-  background: repeating-linear-gradient(to bottom, transparent 0 3px, rgba(0,0,0,.42) 4px);
+  opacity: .14;
+  background: repeating-linear-gradient(to bottom, transparent 0 3px, rgba(0,0,0,.4) 4px);
 }
 
 .game-shell {
@@ -83,7 +85,6 @@ h1 {
   letter-spacing: -2px;
   text-shadow: 3px 3px 0 #0b0907;
 }
-
 h2 {
   margin-bottom: 0;
   font-size: 18px;
@@ -142,29 +143,49 @@ h2 {
   min-height: 0;
   padding: 0;
   border: 0;
-  background: #12100e;
+  background: #0d0b09;
   cursor: crosshair;
   overflow: hidden;
   outline: 0;
+}
+
+.tile-layer {
+  position: absolute;
+  inset: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  display: block;
+  pointer-events: none;
+}
+.terrain-layer { z-index: 1; }
+.trap-layer { z-index: 2; }
+.monster-layer { z-index: 3; }
+
+.tile::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: 4;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.045),
+    inset 0 -2px 0 rgba(0,0,0,.12);
 }
 
 .tile::after {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 5;
   pointer-events: none;
-  box-shadow: inset 0 0 0 2px rgba(255,255,255,.035);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.55);
 }
 
 .tile:hover::after,
 .tile.hovered::after {
-  box-shadow: inset 0 0 0 4px var(--gold), inset 0 0 0 6px #2b1d08;
-}
-
-.tile canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
+  box-shadow:
+    inset 0 0 0 3px var(--gold),
+    inset 0 0 0 5px #2b1d08;
 }
 
 .hint-line {
@@ -203,7 +224,7 @@ h2 {
 
 .tool-button {
   min-width: 0;
-  min-height: 104px;
+  min-height: 108px;
   padding: 8px 5px 7px;
   display: flex;
   flex-direction: column;
@@ -218,11 +239,7 @@ h2 {
     inset -2px -2px 0 #17130f;
   cursor: pointer;
 }
-
-.tool-button:hover {
-  background: #3b3227;
-}
-
+.tool-button:hover { background: #3b3227; }
 .tool-button:active,
 .tool-button.selected {
   transform: translate(2px, 2px);
@@ -235,12 +252,11 @@ h2 {
 }
 
 .tool-button canvas {
-  width: 48px;
-  height: 48px;
+  width: 54px;
+  height: 54px;
   background: #17130f;
   border: 2px solid #0a0806;
 }
-
 .tool-button span { font-size: 13px; font-weight: 700; }
 .tool-button small { color: var(--muted); font-size: 9px; letter-spacing: 1px; }
 .tool-button.selected small { color: #d7bd79; }
@@ -255,8 +271,10 @@ h2 {
   font-weight: 700;
   letter-spacing: 1px;
 }
-.pixel-button:active { transform: translate(2px, 2px); box-shadow: inset 2px 2px 0 #17130f; }
-
+.pixel-button:active {
+  transform: translate(2px, 2px);
+  box-shadow: inset 2px 2px 0 #17130f;
+}
 .danger-button { background: #5b2c26; }
 .danger-button:hover { background: #71352c; }
 
@@ -288,11 +306,10 @@ h2 {
   margin-top: 16px;
   padding: 10px 14px;
   display: grid;
-  grid-template-columns: auto 48px minmax(0, 1fr) auto;
+  grid-template-columns: auto 52px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
 }
-
 .status-label {
   color: var(--gold);
   font-size: 10px;
@@ -300,14 +317,12 @@ h2 {
   transform: rotate(180deg);
   letter-spacing: 2px;
 }
-
 #selectedIcon {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   background: #17130f;
   border: 2px solid #080706;
 }
-
 .status-copy { min-width: 0; }
 .status-copy strong, .status-copy span { display: block; }
 .status-copy strong { font-size: 13px; }
@@ -319,10 +334,7 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.status-coordinates {
-  color: #806f53;
-  font-size: 11px;
-}
+.status-coordinates { color: #806f53; font-size: 11px; }
 
 .toast {
   position: fixed;
@@ -355,15 +367,18 @@ h2 {
   .topbar .danger-button { font-size: 10px; padding-inline: 8px; }
   .eyebrow { font-size: 9px; letter-spacing: 1px; }
   .palette-grid { gap: 6px; }
-  .tool-button { min-height: 92px; }
-  .tool-button canvas { width: 42px; height: 42px; }
-  .statusbar { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .tool-button { min-height: 96px; }
+  .tool-button canvas { width: 46px; height: 46px; }
+  .statusbar { grid-template-columns: 48px minmax(0, 1fr) auto; }
   .status-label { display: none; }
 }
 
 @media (max-width: 460px) {
   .game-shell { width: calc(100% - 10px); margin: 5px auto 16px; }
-  .pixel-panel { border-width: 3px; box-shadow: inset 2px 2px 0 var(--panel-light), inset -2px -2px 0 #17130f, 3px 3px 0 rgba(0,0,0,.45); }
+  .pixel-panel {
+    border-width: 3px;
+    box-shadow: inset 2px 2px 0 var(--panel-light), inset -2px -2px 0 #17130f, 3px 3px 0 rgba(0,0,0,.45);
+  }
   .topbar { gap: 8px; }
   h1 { font-size: 22px; letter-spacing: -1px; }
   .board-panel, .palette-panel { padding: 10px; }
@@ -371,13 +386,13 @@ h2 {
   .panel-kicker { font-size: 9px; }
   h2 { font-size: 15px; }
   .hint-line { font-size: 9px; gap: 5px; }
-  .tool-button { min-height: 78px; padding: 5px 2px; border-width: 2px; }
-  .tool-button canvas { width: 34px; height: 34px; }
+  .tool-button { min-height: 82px; padding: 5px 2px; border-width: 2px; }
+  .tool-button canvas { width: 38px; height: 38px; }
   .tool-button span { font-size: 11px; }
   .tool-button small { font-size: 7px; }
   .eraser-button { margin-top: 10px; }
   .statusbar { min-height: 62px; padding: 8px; gap: 8px; }
-  #selectedIcon { width: 38px; height: 38px; }
+  #selectedIcon { width: 40px; height: 40px; }
   .status-copy strong { font-size: 11px; }
   .status-copy span { font-size: 9px; }
   .status-coordinates { display: none; }
