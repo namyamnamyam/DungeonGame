@@ -15,12 +15,17 @@ const TOOLS = {
 };
 
 const C = {
-  void:'#0e0c0a',void2:'#17130f',black:'#050403',mortar:'#17130f',stone0:'#28231d',stone1:'#473e33',stone2:'#5c5142',stone3:'#716553',stone4:'#857762',shadow:'#211c17',
-  path0:'#332d26',path1:'#453d33',path2:'#584d3f',path3:'#6b5d4b',room0:'#403628',room1:'#594936',room2:'#705c43',room3:'#836c4f',
-  steel0:'#363a3a',steel1:'#697071',steel2:'#a4aa9f',steel3:'#d7d8c9',rust:'#81522f',
-  slime0:'#263b1c',slime1:'#4f7c2e',slime2:'#78aa43',slime3:'#a8d45d',slime4:'#d8ef93',
-  gob0:'#384923',gob1:'#5f7735',gob2:'#809a49',gob3:'#aabb65',leather0:'#3e2719',leather1:'#6b4328',leather2:'#8e5f38',cloth:'#392c25',
-  bone0:'#625e52',bone1:'#9c947d',bone2:'#d8cfb1',bone3:'#f0e7c8',sticky0:'#4b4e22',sticky1:'#7d8133',sticky2:'#a7ad46',sticky3:'#d8d968',sticky4:'#f3ed91',eye:'#d8d56e',red:'#7a2e24'
+  void:'#0e0c0a',void2:'#17130f',black:'#050403',mortar:'#15120f',
+  stone0:'#26211c',stone1:'#3a332a',stone2:'#4d4438',stone3:'#615546',stone4:'#786a57',stone5:'#93836b',
+  path0:'#302a23',path1:'#3e372e',path2:'#50463a',path3:'#645746',path4:'#796a55',
+  room0:'#342b21',room1:'#493a2b',room2:'#5a4935',room3:'#705b42',room4:'#887055',
+  steel0:'#303536',steel1:'#545b5c',steel2:'#798182',steel3:'#aab0aa',steel4:'#d6d8ce',rust:'#7d4b2c',
+  slime0:'#213019',slime1:'#365522',slime2:'#56832f',slime3:'#78ad43',slime4:'#a6d45d',slime5:'#d9ef95',
+  gob0:'#2e3b20',gob1:'#4f642e',gob2:'#708b40',gob3:'#98ad58',gob4:'#bfca7b',
+  leather0:'#332116',leather1:'#56351f',leather2:'#774a2b',leather3:'#99643a',cloth:'#312821',
+  bone0:'#555145',bone1:'#837c69',bone2:'#b7ae92',bone3:'#ddd4b6',bone4:'#f2e9cb',
+  sticky0:'#41451d',sticky1:'#666b29',sticky2:'#8e9636',sticky3:'#b3bc4d',sticky4:'#dbdd70',sticky5:'#f1ed9a',
+  eye:'#ddd76e',red:'#7d3025',blue:'#72a6b3',shadow:'rgba(0,0,0,.36)'
 };
 
 const gridElement=document.getElementById('grid');
@@ -38,87 +43,191 @@ let selectedTool='path',pointerDown=false,lastPaintedIndex=-1,toastTimer=null;
 const cells=Array.from({length:GRID_SIZE*GRID_SIZE},()=>({terrain:null,trap:null,monster:null}));
 
 const px=(ctx,x,y,w,h,color)=>{ctx.fillStyle=color;ctx.fillRect(x,y,w,h)};
+const dot=(ctx,x,y,color)=>px(ctx,x,y,1,1,color);
 function clear(ctx){ctx.clearRect(0,0,SPRITE,SPRITE);ctx.imageSmoothingEnabled=false}
-function lineH(ctx,x,y,w,color,t=2){px(ctx,x,y,w,t,color)}
-function lineV(ctx,x,y,h,color,t=2){px(ctx,x,y,t,h,color)}
+function h(ctx,x,y,w,color,t=1){px(ctx,x,y,w,t,color)}
+function v(ctx,x,y,hh,color,t=1){px(ctx,x,y,t,hh,color)}
+function frame(ctx,x,y,w,hh,light,dark){h(ctx,x,y,w,light);v(ctx,x,y,hh,light);h(ctx,x,y+hh-1,w,dark);v(ctx,x+w-1,y,hh,dark)}
+function shadow(ctx,x,y,w,hh){px(ctx,x,y,w,hh,C.shadow)}
 
-function drawVoid(ctx){px(ctx,0,0,64,64,C.void);[[5,8,10,3],[42,18,13,3],[16,43,9,3],[48,54,5,5],[29,29,4,3]].forEach(r=>px(ctx,...r,C.void2));px(ctx,8,51,3,3,'#231b14')}
+function drawVoid(ctx){
+  px(ctx,0,0,64,64,C.void);
+  [[6,8,7,2],[45,11,10,2],[18,29,5,2],[41,39,13,2],[8,52,3,3],[28,56,8,2],[54,50,3,3]].forEach(r=>px(ctx,...r,C.void2));
+  [[11,17],[49,27],[23,48],[37,14],[56,35]].forEach(([x,y])=>dot(ctx,x,y,'#211a14'));
+}
+
+function brick(ctx,x,y,w,hh,fill,seed){
+  px(ctx,x,y,w,hh,fill);
+  h(ctx,x+1,y+1,Math.max(1,w-2),C.stone5);
+  h(ctx,x+1,y+hh-2,Math.max(1,w-2),C.stone0);
+  v(ctx,x+w-2,y+2,Math.max(1,hh-4),C.stone1);
+  if(seed%2===0)h(ctx,x+4,y+4,Math.min(6,w-7),'#83745f');
+  if(seed%3===0){dot(ctx,x+Math.max(2,w-5),y+3,C.stone0);dot(ctx,x+Math.max(3,w-4),y+4,C.stone0)}
+  if(seed%4===0&&w>13){h(ctx,x+6,y+hh-5,4,C.stone2);dot(ctx,x+10,y+hh-4,C.stone2)}
+}
 
 function drawWall(ctx){
   px(ctx,0,0,64,64,C.mortar);
-  const bricks=[[0,0,25,14],[27,0,37,14],[-8,16,27,14],[21,16,30,14],[53,16,20,14],[0,32,33,14],[35,32,29,14],[-6,48,24,16],[20,48,27,16],[49,48,20,16]];
-  bricks.forEach((b,i)=>{px(ctx,b[0],b[1],b[2],b[3],i%3===0?C.stone3:(i%3===1?C.stone2:C.stone1));lineH(ctx,b[0],b[1]+b[3]-3,b[2],C.stone0,3);lineH(ctx,b[0]+3,b[1]+2,Math.max(3,b[2]-7),C.stone4,2)});
-  [[10,7,8],[42,10,7],[8,38,10],[49,24,8],[27,55,9]].forEach(([x,y,w])=>lineH(ctx,x,y,w,'#8d8069',2));
-  [[13,18,6,5],[38,35,7,5],[53,51,5,4]].forEach(([x,y,w,h])=>{lineV(ctx,x,y,h,'#29231d',2);lineH(ctx,x,y+h-2,w,'#29231d',2)});
+  const rows=[
+    [[-4,0,17],[14,0,22],[37,0,15],[53,0,15]],
+    [[-9,11,20],[12,11,17],[30,11,22],[53,11,16]],
+    [[-3,22,25],[23,22,15],[39,22,20],[60,22,12]],
+    [[-7,33,18],[12,33,23],[36,33,14],[51,33,20]],
+    [[-2,44,22],[21,44,18],[40,44,24]],
+    [[-8,55,19],[12,55,16],[29,55,21],[51,55,18]]
+  ];
+  rows.forEach((row,ri)=>row.forEach((b,bi)=>brick(ctx,b[0],b[1],b[2],9,[C.stone2,C.stone3,C.stone4][(ri+bi)%3],ri*5+bi)));
+  [[8,15,4],[8,19,3],[31,4,5],[35,4,4],[44,27,5],[48,30,3],[18,48,4],[22,51,5],[53,59,4]].forEach(([x,y,w])=>h(ctx,x,y,w,C.stone0));
+  [[9,16],[10,17],[33,5],[34,6],[46,28],[47,29],[20,49],[21,50],[55,58]].forEach(([x,y])=>dot(ctx,x,y,'#181511'));
+  [[3,2],[27,13],[5,36],[42,46],[57,24]].forEach(([x,y])=>{dot(ctx,x,y,'#a09278');dot(ctx,x+1,y,'#8e7f68')});
+}
+
+function slab(ctx,x,y,w,hh,fill,seed){
+  px(ctx,x,y,w,hh,fill);
+  h(ctx,x+1,y+1,w-2,C.path4);
+  h(ctx,x+1,y+hh-2,w-2,C.path0);
+  v(ctx,x+w-2,y+2,hh-4,C.path1);
+  if(seed%2===0){h(ctx,x+4,y+5,Math.min(7,w-8),C.path3);dot(ctx,x+4,y+6,C.path4)}
+  if(seed%3===0){dot(ctx,x+w-5,y+3,C.path0);dot(ctx,x+w-6,y+4,C.path0)}
+  if(seed%4===0&&hh>11){v(ctx,x+7,y+hh-6,3,C.path0);h(ctx,x+7,y+hh-4,4,C.path0)}
 }
 
 function drawPath(ctx){
   px(ctx,0,0,64,64,C.path0);
-  const slabs=[[2,2,24,17],[29,2,33,17],[2,22,17,18],[22,22,27,18],[52,22,10,18],[2,43,28,19],[33,43,29,19]];
-  slabs.forEach((s,i)=>{px(ctx,s[0],s[1],s[2],s[3],i%2?C.path1:C.path2);lineH(ctx,s[0]+2,s[1]+2,s[2]-4,C.path3,2);lineH(ctx,s[0],s[1]+s[3]-2,s[2],C.shadow,2)});
-  [[10,12,7],[39,8,10],[7,31,6],[31,29,9],[42,51,8]].forEach(([x,y,w])=>lineH(ctx,x,y,w,'#746450',2));
-  [[16,5,3,5],[46,25,4,6],[25,49,3,4]].forEach(([x,y,w,h])=>px(ctx,x,y,w,h,'#393127'));
+  const slabs=[
+    [1,1,19,14],[21,1,15,14],[37,1,26,14],
+    [1,16,13,15],[15,16,25,15],[41,16,22,15],
+    [1,32,22,14],[24,32,17,14],[42,32,21,14],
+    [1,47,16,16],[18,47,28,16],[47,47,16,16]
+  ];
+  slabs.forEach((s,i)=>slab(ctx,...s,[C.path1,C.path2,C.path3][i%3],i));
+  [[9,24],[33,12],[51,39],[28,53],[4,43],[58,9]].forEach(([x,y])=>dot(ctx,x,y,'#85735c'));
+  [[12,7],[25,27],[45,21],[36,42],[53,55]].forEach(([x,y])=>{dot(ctx,x,y,C.path0);dot(ctx,x+1,y+1,C.path0)});
 }
 
 function drawRoom(ctx){
   px(ctx,0,0,64,64,C.room0);
-  for(let y=2;y<64;y+=16){for(let x=2;x<64;x+=16){px(ctx,x,y,13,13,(x+y)%32?C.room1:C.room2);lineH(ctx,x+2,y+2,9,C.room3,2);lineV(ctx,x+2,y+5,6,'#67543e',1)}}
-  lineH(ctx,0,0,64,'#2b241c',3);lineH(ctx,0,61,64,'#1e1914',3);lineV(ctx,0,0,64,'#2b241c',3);lineV(ctx,61,0,64,'#1e1914',3);
-  [[15,15],[31,15],[47,15],[15,31],[31,31],[47,31],[15,47],[31,47],[47,47]].forEach(([x,y])=>px(ctx,x,y,2,2,'#30281f'));
+  for(let y=2;y<=54;y+=13){
+    for(let x=2;x<=54;x+=13){
+      const idx=((x+y)/13)|0;
+      const fill=[C.room1,C.room2,C.room3][idx%3];
+      px(ctx,x,y,11,11,fill);
+      h(ctx,x+1,y+1,9,C.room4);
+      h(ctx,x+1,y+9,9,'#3c3025');
+      v(ctx,x+9,y+2,7,'#4a3b2d');
+      if((x+y)%26===0){dot(ctx,x+3,y+4,'#9a815f');dot(ctx,x+4,y+4,'#8b7254')}
+      if((x*y)%5===0){dot(ctx,x+7,y+7,'#3f3226')}
+    }
+  }
+  frame(ctx,0,0,64,64,'#5d4b38','#211b15');
+  [[4,4],[58,4],[4,58],[58,58]].forEach(([x,y])=>{dot(ctx,x,y,'#9a805d');dot(ctx,x+(x<32?1:-1),y,'#7f684d')});
+}
+
+function spikeShape(ctx,cx,base,height){
+  const top=base-height;
+  dot(ctx,cx,top,C.steel4);
+  px(ctx,cx-1,top+1,3,3,C.steel3);
+  px(ctx,cx-2,top+4,5,Math.max(3,height-8),C.steel2);
+  px(ctx,cx-1,top+5,2,Math.max(2,height-10),C.steel4);
+  px(ctx,cx-3,base-4,7,4,C.steel1);
+  dot(ctx,cx+2,base-3,C.rust);
 }
 
 function drawSpike(ctx){
-  [[5,48,16,8],[24,48,16,8],[43,48,16,8],[12,38,16,7],[36,37,16,7]].forEach(([x,y,w,h])=>{px(ctx,x,y,w,h,C.steel0);lineH(ctx,x+2,y+1,w-4,C.steel1,2);px(ctx,x+3,y+4,3,2,C.rust);px(ctx,x+w-6,y+4,3,2,C.rust)});
-  const spikes=[[9,48,10],[17,48,20],[28,48,15],[36,48,28],[47,48,22],[55,48,13],[17,38,18],[25,38,26],[41,37,24],[49,37,15]];
-  spikes.forEach(([x,base,h],i)=>{px(ctx,x-2,base-h+5,5,h-5,C.steel1);px(ctx,x-1,base-h+2,3,6,C.steel2);px(ctx,x,base-h,1,4,C.steel3);if(i%2===0)px(ctx,x-1,base-8,2,5,C.steel3)});
+  px(ctx,5,45,54,10,C.steel0);frame(ctx,5,45,54,10,C.steel2,'#202526');
+  for(let x=8;x<58;x+=7){v(ctx,x,47,6,'#252b2c');dot(ctx,x,48,C.rust)}
+  [[10,45,19],[17,45,28],[24,45,15],[31,45,34],[38,45,22],[45,45,30],[52,45,18],[14,39,18],[22,39,25],[30,39,17],[40,39,27],[49,39,20]].forEach(([x,b,hh])=>spikeShape(ctx,x,b,hh));
+  [[7,56],[18,57],[35,56],[53,57]].forEach(([x,y])=>{h(ctx,x,y,4,C.steel1);dot(ctx,x+1,y,C.steel3)});
 }
 
 function drawPit(ctx){
-  [[5,13,18,8],[25,10,17,8],[44,13,15,8],[4,42,17,9],[23,46,18,8],[43,42,16,9]].forEach((r,i)=>{px(ctx,...r,i%2?C.stone2:C.stone3);lineH(ctx,r[0]+2,r[1]+2,r[2]-4,C.stone4,2);lineH(ctx,r[0],r[1]+r[3]-2,r[2],C.stone0,2)});
-  px(ctx,9,18,46,30,'#1a1612');px(ctx,12,20,40,28,'#0b0908');px(ctx,16,23,34,24,C.black);
-  lineH(ctx,16,23,30,'#24201a',2);lineV(ctx,12,24,20,'#2d271f',2);
-  [[9,29,4,3],[50,27,5,3],[19,48,5,3],[42,47,4,3]].forEach(r=>px(ctx,...r,C.stone1));
+  const rim=[[5,16,12,7],[18,12,13,8],[32,11,11,8],[44,14,15,7],[4,22,8,13],[52,22,8,14],[6,42,13,8],[20,46,12,7],[33,47,12,7],[46,42,13,8]];
+  rim.forEach((r,i)=>{px(ctx,...r,[C.stone2,C.stone3,C.stone4][i%3]);h(ctx,r[0]+1,r[1]+1,r[2]-2,C.stone5);h(ctx,r[0]+1,r[1]+r[3]-2,r[2]-2,C.stone0);if(i%2===0)dot(ctx,r[0]+3,r[1]+3,'#8e8068')});
+  px(ctx,11,18,42,31,'#201b16');
+  px(ctx,14,20,36,28,'#15120f');
+  px(ctx,17,22,31,25,'#0d0b09');
+  px(ctx,20,25,26,21,C.black);
+  h(ctx,18,22,25,'#2c251e');v(ctx,14,23,20,'#2a241d');
+  [[13,31],[49,27],[22,49],[41,49],[8,37]].forEach(([x,y])=>{dot(ctx,x,y,C.stone1);dot(ctx,x+1,y,C.stone0)});
+  [[26,28],[37,35],[30,41]].forEach(([x,y])=>dot(ctx,x,y,'#090807'));
 }
 
 function drawSticky(ctx){
-  const puddles=[[7,43,50,10],[12,35,40,15],[20,28,26,18],[29,24,15,13],[4,47,20,7],[43,42,16,9]];
-  puddles.forEach((r,i)=>px(ctx,...r,i<2?C.sticky1:C.sticky2));
-  px(ctx,14,39,36,10,C.sticky2);px(ctx,19,33,28,13,C.sticky3);px(ctx,27,29,14,10,C.sticky2);
-  [[18,38,7,3],[34,33,8,3],[45,43,6,3]].forEach(r=>px(ctx,...r,C.sticky4));
-  [[12,46,4,4],[30,43,3,3],[51,48,3,3]].forEach(r=>{px(ctx,r[0],r[1],r[2],r[3],C.sticky0);px(ctx,r[0]+1,r[1],1,1,C.sticky4)});
+  const bands=[[18,27,28],[14,29,36],[11,32,42],[8,35,48],[6,38,52],[5,41,54],[7,44,50],[11,47,42],[16,50,32]];
+  bands.forEach(([x,y,w],i)=>h(ctx,x,y,w,[C.sticky2,C.sticky3,C.sticky3,C.sticky2,C.sticky2,C.sticky1,C.sticky2,C.sticky2,C.sticky1][i],3));
+  h(ctx,19,28,15,C.sticky4,2);h(ctx,14,34,11,C.sticky4,2);h(ctx,35,37,13,C.sticky4,2);h(ctx,24,44,9,C.sticky5,1);
+  [[17,39,3],[29,35,2],[45,42,3],[36,47,2],[12,44,2]].forEach(([x,y,s])=>{px(ctx,x,y,s,s,C.sticky0);dot(ctx,x+1,y,C.sticky5)});
+  [[23,31],[41,34],[31,47],[50,40]].forEach(([x,y])=>{dot(ctx,x,y,C.sticky5);dot(ctx,x+1,y,C.sticky4)});
+  v(ctx,10,45,5,C.sticky1);dot(ctx,9,49,C.sticky2);v(ctx,52,42,4,C.sticky1);
 }
 
+function slimeBand(ctx,y,x,w,color){h(ctx,x,y,w,color,1)}
 function drawSlime(ctx){
-  px(ctx,12,49,42,6,'rgba(0,0,0,.35)');
-  px(ctx,15,28,36,24,C.slime0);px(ctx,11,36,44,14,C.slime0);px(ctx,19,23,28,8,C.slime0);
-  px(ctx,17,29,32,20,C.slime2);px(ctx,13,37,40,11,C.slime2);px(ctx,21,25,24,8,C.slime2);
-  px(ctx,20,27,24,8,C.slime3);px(ctx,18,32,14,5,C.slime3);px(ctx,23,27,12,3,C.slime4);
-  px(ctx,21,37,7,8,C.black);px(ctx,39,37,7,8,C.black);px(ctx,23,38,2,2,'#f1f0ca');px(ctx,41,38,2,2,'#f1f0ca');
-  px(ctx,29,45,10,3,C.slime0);px(ctx,31,46,6,2,'#6d8d39');px(ctx,47,33,4,4,C.slime3);px(ctx,48,32,2,2,C.slime4);px(ctx,15,42,3,3,C.slime3);
+  shadow(ctx,13,53,40,4);
+  const outline=[[28,20,9],[23,21,19],[20,22,25],[18,24,29],[16,27,33],[14,31,37],[12,36,41],[11,41,43],[12,46,41],[15,50,35],[20,53,25]];
+  outline.forEach(([x,y,w])=>slimeBand(ctx,y,x,w,C.slime0));
+  for(let y=23;y<=50;y++){
+    const t=(y-23)/27;
+    const half=Math.round(12+9*Math.sin(t*Math.PI));
+    const cx=32;
+    h(ctx,cx-half,y,half*2,C.slime2);
+  }
+  for(let y=28;y<48;y++){
+    const inset=Math.max(0,Math.floor((y-28)/7));
+    h(ctx,18+inset,y,4,C.slime1);
+  }
+  h(ctx,24,24,15,C.slime4,2);h(ctx,21,27,10,C.slime4);h(ctx,25,25,8,C.slime5);dot(ctx,34,26,C.slime5);
+  h(ctx,17,48,28,C.slime3);h(ctx,20,50,22,C.slime2);
+  px(ctx,21,36,7,8,C.slime0);px(ctx,39,36,7,8,C.slime0);
+  px(ctx,22,37,5,6,'#10120d');px(ctx,40,37,5,6,'#10120d');dot(ctx,23,38,'#eff7d7');dot(ctx,41,38,'#eff7d7');dot(ctx,26,42,C.slime3);dot(ctx,44,42,C.slime3);
+  h(ctx,29,45,9,C.slime0);h(ctx,31,46,5,'#6c913b');dot(ctx,30,45,C.slime4);
+  [[17,35],[46,30],[20,43],[42,47],[34,31]].forEach(([x,y])=>dot(ctx,x,y,C.slime4));
 }
 
 function drawGoblin(ctx){
-  px(ctx,16,55,38,5,'rgba(0,0,0,.35)');
-  px(ctx,12,18,10,11,C.gob0);px(ctx,46,18,10,11,C.gob0);px(ctx,20,12,28,26,C.gob0);
-  px(ctx,14,19,10,7,C.gob2);px(ctx,44,19,10,7,C.gob2);px(ctx,22,14,24,22,C.gob2);px(ctx,25,12,18,5,C.gob3);
-  px(ctx,25,21,7,4,C.gob0);px(ctx,38,21,7,4,C.gob0);px(ctx,27,23,4,4,C.black);px(ctx,39,23,4,4,C.black);px(ctx,28,23,1,1,'#f1e7b0');px(ctx,40,23,1,1,'#f1e7b0');
-  px(ctx,33,26,5,5,C.gob1);px(ctx,31,31,10,3,'#5a2d1f');px(ctx,34,31,2,2,'#cbb37b');
-  px(ctx,21,37,28,18,C.leather0);px(ctx,24,37,22,16,C.leather1);px(ctx,28,39,14,4,C.leather2);lineV(ctx,34,39,14,'#3d2719',2);px(ctx,23,46,24,3,'#3c2a20');
-  px(ctx,17,39,7,15,C.gob1);px(ctx,47,38,7,16,C.gob1);px(ctx,24,53,8,8,C.gob0);px(ctx,40,53,8,8,C.gob0);
-  px(ctx,51,36,4,20,C.steel1);px(ctx,52,32,3,8,C.steel2);px(ctx,53,30,1,5,C.steel3);px(ctx,48,47,11,4,C.leather2);px(ctx,33,47,6,5,C.steel0);px(ctx,34,48,4,3,C.steel2);
+  shadow(ctx,16,57,37,3);
+  const earL=[[11,20,5],[9,21,8],[8,23,10],[10,25,9],[13,27,7]];
+  const earR=[[48,20,5],[47,21,8],[46,23,10],[45,25,9],[45,27,7]];
+  earL.forEach(([x,y,w])=>h(ctx,x,y,w,C.gob1));earR.forEach(([x,y,w])=>h(ctx,x,y,w,C.gob1));
+  h(ctx,9,23,5,C.gob3);h(ctx,51,23,4,C.gob3);dot(ctx,10,24,'#b6be72');dot(ctx,53,24,'#b6be72');
+  [[25,12,16],[21,14,24],[19,17,28],[18,21,30],[18,26,30],[20,31,26]].forEach(([x,y,w])=>h(ctx,x,y,w,C.gob0,3));
+  [[25,14,16],[22,16,22],[21,19,24],[20,23,26],[20,27,26],[23,31,20]].forEach(([x,y,w],i)=>h(ctx,x,y,w,[C.gob2,C.gob2,C.gob3,C.gob2,C.gob2,C.gob1][i],3));
+  h(ctx,26,13,13,C.gob4);h(ctx,23,16,8,C.gob3);dot(ctx,39,16,C.gob4);
+  h(ctx,23,21,8,C.gob0,2);h(ctx,37,21,8,C.gob0,2);
+  px(ctx,25,23,5,5,'#11120c');px(ctx,38,23,5,5,'#11120c');dot(ctx,26,24,'#ede9bd');dot(ctx,39,24,'#ede9bd');
+  px(ctx,32,25,4,5,C.gob1);dot(ctx,31,28,C.gob0);dot(ctx,36,28,C.gob0);
+  h(ctx,27,31,13,'#4d261a',2);dot(ctx,30,31,'#d6c38c');dot(ctx,37,31,'#d6c38c');h(ctx,31,34,5,C.gob0);
+  px(ctx,28,35,12,5,C.gob1);px(ctx,20,39,29,17,C.leather0);px(ctx,22,39,25,16,C.leather1);
+  h(ctx,24,40,21,C.leather3,2);v(ctx,33,40,15,C.leather0,2);h(ctx,21,47,27,C.cloth,3);
+  h(ctx,21,50,27,'#2a201a',3);px(ctx,32,49,6,5,C.steel0);frame(ctx,32,49,6,5,C.steel3,C.steel0);dot(ctx,34,51,C.steel4);
+  px(ctx,16,40,6,15,C.gob1);px(ctx,48,39,6,16,C.gob1);h(ctx,17,41,4,C.gob3);h(ctx,49,40,4,C.gob3);
+  px(ctx,24,55,7,7,C.gob0);px(ctx,40,55,7,7,C.gob0);h(ctx,22,61,10,C.leather0,2);h(ctx,39,61,10,C.leather0,2);
+  px(ctx,53,37,2,18,C.steel1);px(ctx,54,34,1,5,C.steel4);dot(ctx,55,35,C.steel3);h(ctx,50,49,9,C.leather2,3);dot(ctx,52,50,C.leather3);
+  [[26,43],[42,43],[28,47],[44,52]].forEach(([x,y])=>dot(ctx,x,y,'#bd8752'));
 }
 
 function drawSkeleton(ctx){
-  px(ctx,15,56,40,4,'rgba(0,0,0,.35)');
-  px(ctx,23,10,25,21,C.bone0);px(ctx,25,9,21,20,C.bone2);px(ctx,29,7,14,4,C.bone3);px(ctx,27,13,17,14,C.bone3);
-  px(ctx,29,16,6,6,C.black);px(ctx,39,16,6,6,C.black);px(ctx,31,17,2,2,'#6fa6b8');px(ctx,41,17,2,2,'#6fa6b8');px(ctx,35,22,4,4,C.bone0);px(ctx,31,27,14,4,C.bone1);px(ctx,33,27,2,3,C.black);px(ctx,39,27,2,3,C.black);
-  px(ctx,34,31,5,23,C.bone2);px(ctx,25,33,24,4,C.bone2);px(ctx,22,37,8,4,C.bone1);px(ctx,44,37,8,4,C.bone1);
-  [[26,36,19],[27,41,17],[29,46,13]].forEach(([x,y,w])=>{lineH(ctx,x,y,w,C.bone2,3);lineV(ctx,x,y,5,C.bone1,2);lineV(ctx,x+w-2,y,5,C.bone1,2)});
-  px(ctx,19,38,4,17,C.bone1);px(ctx,50,38,4,17,C.bone1);px(ctx,28,52,5,10,C.bone2);px(ctx,41,52,5,10,C.bone2);px(ctx,26,60,9,3,C.bone1);px(ctx,40,60,9,3,C.bone1);
-  px(ctx,54,30,4,28,C.steel1);px(ctx,55,26,3,8,C.steel2);px(ctx,56,23,1,5,C.steel3);px(ctx,50,47,12,4,C.leather2);
+  shadow(ctx,15,59,39,3);
+  [[28,8,14],[24,9,22],[22,12,26],[21,16,28],[21,21,28],[23,26,24],[27,30,16]].forEach(([x,y,w])=>h(ctx,x,y,w,C.bone0,3));
+  [[28,9,14],[25,11,20],[24,14,22],[23,18,24],[24,22,22],[26,26,18]].forEach(([x,y,w],i)=>h(ctx,x,y,w,[C.bone3,C.bone3,C.bone4,C.bone3,C.bone3,C.bone2][i],3));
+  h(ctx,29,10,10,C.bone4);dot(ctx,26,14,'#f7efd3');dot(ctx,44,16,C.bone1);
+  px(ctx,26,17,7,7,C.black);px(ctx,39,17,7,7,C.black);px(ctx,28,19,3,3,'#20343a');px(ctx,41,19,3,3,'#20343a');dot(ctx,29,19,C.blue);dot(ctx,42,19,C.blue);
+  px(ctx,34,23,4,4,C.bone0);dot(ctx,33,26,C.black);dot(ctx,38,26,C.black);h(ctx,28,28,16,C.bone1,2);h(ctx,30,29,12,C.bone3);
+  [31,34,37,40].forEach(x=>v(ctx,x,29,3,C.bone0));
+  px(ctx,34,32,5,22,C.bone2);h(ctx,24,34,25,C.bone3,3);h(ctx,25,35,23,C.bone1);
+  const ribs=[[27,38,18],[28,42,16],[29,46,14],[30,50,12]];
+  ribs.forEach(([x,y,w])=>{h(ctx,x,y,w,C.bone2,2);dot(ctx,x-1,y+1,C.bone1);dot(ctx,x+w,y+1,C.bone1);v(ctx,x-1,y+1,3,C.bone1);v(ctx,x+w,y+1,3,C.bone1)});
+  px(ctx,20,37,3,17,C.bone1);px(ctx,22,38,2,16,C.bone3);px(ctx,50,37,3,18,C.bone1);px(ctx,49,38,2,16,C.bone3);
+  dot(ctx,21,55,C.bone4);dot(ctx,51,55,C.bone4);
+  h(ctx,29,53,15,C.bone1,3);px(ctx,28,55,6,4,C.bone2);px(ctx,40,55,6,4,C.bone2);
+  px(ctx,29,58,3,5,C.bone3);px(ctx,42,58,3,5,C.bone3);h(ctx,27,62,7,C.bone1,2);h(ctx,41,62,7,C.bone1,2);
+  px(ctx,55,31,2,28,C.steel1);px(ctx,56,27,1,6,C.steel4);dot(ctx,57,28,C.steel3);h(ctx,51,48,10,C.leather2,2);dot(ctx,53,49,C.leather3);
 }
 
-function drawEraser(ctx){drawVoid(ctx);px(ctx,17,17,30,30,'#5a231f');px(ctx,20,20,24,24,'#a94e40');px(ctx,25,25,14,14,'#d9765f');px(ctx,29,29,6,6,'#f1d7a8')}
+function drawEraser(ctx){
+  drawVoid(ctx);px(ctx,17,18,30,28,'#56211d');px(ctx,19,20,26,24,'#9b4439');px(ctx,22,22,20,18,'#c45f50');
+  h(ctx,25,25,14,'#e79679',2);h(ctx,28,31,8,'#f0d3a7',3);dot(ctx,31,30,'#fff0c3');
+}
 
 function drawTool(ctx,tool,withBg=true){
   clear(ctx);
