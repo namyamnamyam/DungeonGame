@@ -1,0 +1,192 @@
+const GRID_SIZE = 5;
+
+const TOOLS = {
+  wall: { name: '벽', type: 'terrain', description: '두꺼운 석벽을 배치합니다.' },
+  path: { name: '통로', type: 'terrain', description: '돌바닥 통로를 배치합니다.' },
+  room: { name: '방', type: 'terrain', description: '넓은 석실 바닥을 배치합니다.' },
+  spike: { name: '가시 함정', type: 'object', description: '바닥에서 솟아오르는 쇠가시 함정입니다.' },
+  pit: { name: '구덩이 함정', type: 'object', description: '깊고 어두운 구덩이 함정입니다.' },
+  sticky: { name: '끈끈이 함정', type: 'object', description: '발을 붙잡는 끈적한 점액 웅덩이입니다.' },
+  slime: { name: '슬라임', type: 'object', description: '말랑한 초록색 하급 몬스터입니다.' },
+  goblin: { name: '고블린', type: 'object', description: '귀가 크고 작은 던전 잡병입니다.' },
+  skeleton: { name: '스켈레톤', type: 'object', description: '낡은 검을 든 기본 언데드 병사입니다.' },
+  eraser: { name: '지우개', type: 'eraser', description: '오브젝트를 먼저 지우고, 다시 누르면 지형도 지웁니다.' }
+};
+
+const COLORS = {
+  void: '#0f0d0b', void2: '#15120f', mortar: '#17130f', stone1: '#50483c', stone2: '#655b4c', stone3: '#39332c',
+  path1: '#4b4338', path2: '#5a5041', room1: '#60523f', room2: '#75634a', shadow: '#211c17', black: '#080706',
+  bone: '#ddd3b5', boneDark: '#958b72', green: '#78a743', greenLight: '#a7d45d', greenDark: '#3f6329', goblin: '#73883b',
+  goblinLight: '#9cac58', leather: '#70482c', metal: '#a9a89b', metalDark: '#626258', sticky: '#a5a743', stickyLight: '#d0ca5b'
+};
+
+const gridElement = document.getElementById('grid');
+const resetButton = document.getElementById('resetButton');
+const eraserButton = document.getElementById('eraserButton');
+const toolButtons = [...document.querySelectorAll('.tool-button')];
+const selectedName = document.getElementById('selectedName');
+const selectedDescription = document.getElementById('selectedDescription');
+const selectedIcon = document.getElementById('selectedIcon');
+const hoverInfo = document.getElementById('hoverInfo');
+const placedCount = document.getElementById('placedCount');
+const toast = document.getElementById('toast');
+
+let selectedTool = 'path';
+let pointerDown = false;
+let lastPaintedIndex = -1;
+let toastTimer = null;
+
+const cells = Array.from({ length: GRID_SIZE * GRID_SIZE }, () => ({ terrain: null, object: null }));
+
+function pixel(ctx, x, y, w, h, color) { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); }
+function clearCanvas(ctx) { ctx.clearRect(0, 0, 16, 16); ctx.imageSmoothingEnabled = false; }
+
+function drawVoid(ctx) {
+  pixel(ctx, 0, 0, 16, 16, COLORS.void); pixel(ctx, 1, 2, 2, 1, COLORS.void2); pixel(ctx, 11, 5, 3, 1, COLORS.void2);
+  pixel(ctx, 5, 12, 2, 1, COLORS.void2); pixel(ctx, 13, 14, 1, 1, '#211b15');
+}
+
+function drawWall(ctx) {
+  pixel(ctx, 0, 0, 16, 16, COLORS.mortar);
+  const rows = [[0,0,7,4],[8,0,8,4],[-2,5,6,4],[5,5,7,4],[13,5,5,4],[0,10,8,5],[9,10,7,5]];
+  rows.forEach((r, i) => { pixel(ctx, r[0], r[1], r[2], r[3], i % 3 === 0 ? COLORS.stone2 : COLORS.stone1); pixel(ctx, r[0], r[1] + r[3] - 1, r[2], 1, COLORS.stone3); });
+  pixel(ctx, 2, 1, 3, 1, '#766b59'); pixel(ctx, 7, 6, 3, 1, '#766b59'); pixel(ctx, 11, 11, 3, 1, '#766b59');
+}
+
+function drawPath(ctx) {
+  pixel(ctx, 0, 0, 16, 16, COLORS.path1); pixel(ctx, 0, 3, 16, 1, COLORS.shadow); pixel(ctx, 0, 8, 16, 1, COLORS.shadow);
+  pixel(ctx, 0, 13, 16, 1, COLORS.shadow); pixel(ctx, 5, 0, 1, 3, COLORS.shadow); pixel(ctx, 11, 4, 1, 4, COLORS.shadow);
+  pixel(ctx, 4, 9, 1, 4, COLORS.shadow); pixel(ctx, 12, 14, 1, 2, COLORS.shadow); pixel(ctx, 1, 1, 3, 1, COLORS.path2);
+  pixel(ctx, 7, 5, 3, 1, COLORS.path2); pixel(ctx, 7, 10, 4, 1, COLORS.path2);
+}
+
+function drawRoom(ctx) {
+  pixel(ctx, 0, 0, 16, 16, COLORS.room1); for (let y = 0; y < 16; y += 4) pixel(ctx, 0, y, 16, 1, COLORS.shadow);
+  for (let x = 0; x < 16; x += 4) pixel(ctx, x, 0, 1, 16, COLORS.shadow);
+  pixel(ctx, 1, 1, 3, 2, COLORS.room2); pixel(ctx, 9, 5, 3, 2, COLORS.room2); pixel(ctx, 5, 9, 3, 2, '#6b5942'); pixel(ctx, 13, 13, 2, 2, COLORS.room2);
+}
+
+function drawSpike(ctx) {
+  const dark = '#484943', steel = '#a5a79c', shine = '#d9d6c6';
+  [[2,12],[6,12],[10,12],[13,12],[4,8],[9,8]].forEach(([x, y], i) => { pixel(ctx, x, y, 3, 2, dark); pixel(ctx, x + 1, y - (i % 2 ? 5 : 4), 1, i % 2 ? 5 : 4, steel); pixel(ctx, x + 1, y - (i % 2 ? 5 : 4), 1, 1, shine); });
+}
+
+function drawPit(ctx) {
+  pixel(ctx, 2, 3, 12, 10, '#1a1713'); pixel(ctx, 3, 4, 10, 9, '#090807'); pixel(ctx, 4, 5, 8, 7, '#030303');
+  pixel(ctx, 1, 2, 4, 2, '#655a47'); pixel(ctx, 11, 2, 4, 2, '#4f4638'); pixel(ctx, 1, 12, 5, 2, '#4f4638'); pixel(ctx, 10, 12, 5, 2, '#655a47'); pixel(ctx, 2, 4, 1, 5, '#766a54');
+}
+
+function drawSticky(ctx) {
+  pixel(ctx, 2, 9, 12, 4, COLORS.sticky); pixel(ctx, 4, 7, 8, 6, COLORS.sticky); pixel(ctx, 7, 6, 4, 2, COLORS.sticky);
+  pixel(ctx, 12, 8, 2, 2, COLORS.stickyLight); pixel(ctx, 5, 8, 2, 1, COLORS.stickyLight); pixel(ctx, 8, 10, 1, 1, '#f0e783'); pixel(ctx, 3, 12, 2, 1, '#6f722f');
+}
+
+function drawSlime(ctx) {
+  pixel(ctx, 4, 6, 8, 6, COLORS.greenDark); pixel(ctx, 3, 8, 10, 4, COLORS.green); pixel(ctx, 5, 5, 6, 2, COLORS.green); pixel(ctx, 6, 5, 4, 1, COLORS.greenLight);
+  pixel(ctx, 5, 8, 2, 2, COLORS.black); pixel(ctx, 10, 8, 2, 2, COLORS.black); pixel(ctx, 6, 8, 1, 1, '#d8ef9c'); pixel(ctx, 11, 8, 1, 1, '#d8ef9c'); pixel(ctx, 7, 11, 3, 1, COLORS.greenDark);
+}
+
+function drawGoblin(ctx) {
+  pixel(ctx, 5, 4, 6, 6, COLORS.goblin); pixel(ctx, 3, 5, 2, 2, COLORS.goblinLight); pixel(ctx, 11, 5, 2, 2, COLORS.goblinLight); pixel(ctx, 6, 3, 4, 2, COLORS.goblinLight);
+  pixel(ctx, 6, 6, 1, 1, COLORS.black); pixel(ctx, 9, 6, 1, 1, COLORS.black); pixel(ctx, 7, 8, 2, 1, '#4d2d1d'); pixel(ctx, 5, 10, 6, 4, COLORS.leather);
+  pixel(ctx, 4, 11, 1, 4, COLORS.goblin); pixel(ctx, 11, 10, 1, 5, COLORS.goblin); pixel(ctx, 3, 12, 2, 1, COLORS.metal); pixel(ctx, 2, 13, 3, 1, COLORS.metalDark);
+}
+
+function drawSkeleton(ctx) {
+  pixel(ctx, 6, 3, 5, 5, COLORS.bone); pixel(ctx, 7, 4, 1, 1, COLORS.black); pixel(ctx, 10, 4, 1, 1, COLORS.black); pixel(ctx, 8, 6, 2, 1, COLORS.boneDark);
+  pixel(ctx, 8, 8, 1, 5, COLORS.bone); pixel(ctx, 5, 9, 7, 1, COLORS.bone); pixel(ctx, 5, 10, 1, 4, COLORS.boneDark); pixel(ctx, 11, 9, 1, 5, COLORS.boneDark);
+  pixel(ctx, 7, 13, 1, 3, COLORS.bone); pixel(ctx, 10, 13, 1, 3, COLORS.bone); pixel(ctx, 12, 8, 1, 7, COLORS.metal); pixel(ctx, 13, 7, 1, 2, '#d9d7ca'); pixel(ctx, 11, 12, 3, 1, COLORS.leather);
+}
+
+function drawEraser(ctx) {
+  drawVoid(ctx); pixel(ctx, 4, 4, 8, 8, '#87382f'); pixel(ctx, 5, 5, 6, 6, '#b85648'); pixel(ctx, 7, 7, 2, 2, '#ead7a5'); pixel(ctx, 6, 6, 1, 1, '#ead7a5'); pixel(ctx, 9, 9, 1, 1, '#ead7a5');
+}
+
+function drawToolSprite(ctx, tool, includeBackground = true) {
+  clearCanvas(ctx);
+  if (tool === 'wall') return drawWall(ctx); if (tool === 'path') return drawPath(ctx); if (tool === 'room') return drawRoom(ctx); if (tool === 'eraser') return drawEraser(ctx);
+  if (includeBackground) drawPath(ctx);
+  if (tool === 'spike') drawSpike(ctx); if (tool === 'pit') drawPit(ctx); if (tool === 'sticky') drawSticky(ctx); if (tool === 'slime') drawSlime(ctx); if (tool === 'goblin') drawGoblin(ctx); if (tool === 'skeleton') drawSkeleton(ctx);
+}
+
+function renderCell(index) {
+  const tile = gridElement.children[index]; const canvas = tile.querySelector('canvas'); const ctx = canvas.getContext('2d'); const cell = cells[index]; clearCanvas(ctx);
+  if (cell.terrain === 'wall') drawWall(ctx); else if (cell.terrain === 'room') drawRoom(ctx); else if (cell.terrain === 'path') drawPath(ctx); else drawVoid(ctx);
+  if (cell.object) drawToolSprite(ctx, cell.object, false);
+  const x = (index % GRID_SIZE) + 1, y = Math.floor(index / GRID_SIZE) + 1, pieces = [];
+  if (cell.terrain) pieces.push(TOOLS[cell.terrain].name); if (cell.object) pieces.push(TOOLS[cell.object].name);
+  tile.setAttribute('aria-label', `${x}, ${y}: ${pieces.length ? pieces.join(', ') : '빈칸'}`);
+}
+
+function renderAll() {
+  cells.forEach((_, index) => renderCell(index));
+  placedCount.textContent = String(cells.filter(cell => cell.terrain || cell.object).length);
+}
+
+function createGrid() {
+  const fragment = document.createDocumentFragment();
+  for (let i = 0; i < cells.length; i += 1) {
+    const button = document.createElement('button'); button.className = 'tile'; button.type = 'button'; button.dataset.index = String(i); button.setAttribute('role', 'gridcell');
+    const canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16; button.appendChild(canvas); fragment.appendChild(button);
+  }
+  gridElement.appendChild(fragment); renderAll();
+}
+
+function placeAt(index) {
+  if (index < 0 || index >= cells.length || index === lastPaintedIndex) return;
+  const cell = cells[index], tool = TOOLS[selectedTool];
+  if (tool.type === 'terrain') { cell.terrain = selectedTool; if (selectedTool === 'wall') cell.object = null; }
+  else if (tool.type === 'object') { if (!cell.terrain || cell.terrain === 'wall') cell.terrain = 'path'; cell.object = selectedTool; }
+  else { if (cell.object) cell.object = null; else cell.terrain = null; }
+  lastPaintedIndex = index; renderCell(index); placedCount.textContent = String(cells.filter(item => item.terrain || item.object).length);
+}
+
+function selectTool(toolName) {
+  selectedTool = toolName;
+  toolButtons.forEach(button => button.classList.toggle('selected', button.dataset.tool === toolName));
+  eraserButton.classList.toggle('selected', toolName === 'eraser');
+  const tool = TOOLS[toolName]; selectedName.textContent = tool.name; selectedDescription.textContent = tool.description; drawToolSprite(selectedIcon.getContext('2d'), toolName, true);
+}
+
+function showToast(message) {
+  clearTimeout(toastTimer); toast.textContent = message; toast.classList.add('show'); toastTimer = setTimeout(() => toast.classList.remove('show'), 1100);
+}
+
+function resetMap() {
+  cells.forEach(cell => { cell.terrain = null; cell.object = null; }); renderAll(); showToast('MAP CLEARED');
+}
+
+function updateHover(target) {
+  const tile = target.closest('.tile'); document.querySelectorAll('.tile.hovered').forEach(el => el.classList.remove('hovered'));
+  if (!tile) { hoverInfo.textContent = 'X -- / Y --'; return; }
+  tile.classList.add('hovered'); const index = Number(tile.dataset.index), x = (index % GRID_SIZE) + 1, y = Math.floor(index / GRID_SIZE) + 1;
+  hoverInfo.textContent = `X ${String(x).padStart(2, '0')} / Y ${String(y).padStart(2, '0')}`;
+}
+
+function initPaletteIcons() {
+  toolButtons.forEach(button => { const toolName = button.dataset.tool, canvas = button.querySelector('canvas'); drawToolSprite(canvas.getContext('2d'), toolName, true); button.addEventListener('click', () => selectTool(toolName)); });
+}
+
+gridElement.addEventListener('pointerdown', event => {
+  const tile = event.target.closest('.tile'); if (!tile) return; event.preventDefault(); pointerDown = true; lastPaintedIndex = -1; gridElement.setPointerCapture?.(event.pointerId); placeAt(Number(tile.dataset.index));
+});
+
+gridElement.addEventListener('pointermove', event => {
+  updateHover(document.elementFromPoint(event.clientX, event.clientY) || event.target); if (!pointerDown) return;
+  const element = document.elementFromPoint(event.clientX, event.clientY), tile = element?.closest('.tile'); if (tile && gridElement.contains(tile)) placeAt(Number(tile.dataset.index));
+});
+
+window.addEventListener('pointerup', () => { pointerDown = false; lastPaintedIndex = -1; });
+gridElement.addEventListener('pointerleave', () => { if (!pointerDown) updateHover(document.body); });
+gridElement.addEventListener('focusin', event => updateHover(event.target));
+eraserButton.addEventListener('click', () => selectTool('eraser'));
+resetButton.addEventListener('click', resetMap);
+
+window.addEventListener('keydown', event => {
+  const shortcuts = { '1':'wall','2':'path','3':'room','4':'spike','5':'pit','6':'sticky','7':'slime','8':'goblin','9':'skeleton','0':'eraser','x':'eraser','X':'eraser' };
+  if (shortcuts[event.key]) selectTool(shortcuts[event.key]);
+});
+
+createGrid();
+initPaletteIcons();
+selectTool('path');
